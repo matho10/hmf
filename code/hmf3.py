@@ -118,7 +118,11 @@ class space:
         return res
     def imap(self, func, nodes = 8, full_output=False):
         '''
-        :param func: single-input function([value]) to map on all values, 
+        :param func: single-input function([value]) to map on all values, e.g. f should be something such that f([0,1,2]) is feasible. If you define
+        the function input as a scaler, e.g. f(1) works, but not f([1]), then you need to do g=lambda x: f(x[0]) then
+        use self.imap(g). Similarly, if your function defined as f(a=1, b=2) you need to transform it into:
+        g= lambda x: f(x[0], x[1]). Use the correctly ordered space: s= space(a = np.linspace(...), b=...) This works as
+        s.imap(g)
         :param nodes=8: how mnay nodes used in computation
         :full_output = False: if True, then returns ([all locations]=self('value'), [func(locations)])
         if False, only return ([func(locations)])
