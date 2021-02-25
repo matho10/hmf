@@ -15,7 +15,7 @@ including
 class space(x1 = [0,1,...], x2 = [1.1, 1.2...]: **kwargs)
   .name
   .set
-  .grid_dict
+  .meshgrid_dict
   .N
   .number
   .number_matrix
@@ -43,7 +43,7 @@ import quantecon as qe
 from scipy import sparse
 import numdifftools as nd
 import pandas as pd
-from pathos.multiprocessing import ProcessPool
+from pathos.pools import ProcessPool
 import wdpy
 import itertools as itr
 
@@ -70,6 +70,8 @@ class space:
     ''' sno = space(x1 = ..., x2=..., ...)
     sno.number(a vector of indexies)
     sno.index(a number)
+
+    仍有一些问题：1. 是否要让space默认计算self.value ?
     '''
 
     def __init__(self, **kwargs):
@@ -78,12 +80,21 @@ class space:
         self.set = list(kwargs.values())
         # self.grid = np.meshgrid(*self.set, indexing = 'ij') # returns meshgrids
         grid = np.meshgrid(*self.set, indexing='ij')
-        self.grid_dict = dict(zip(self.name, grid))  # grid_dict is a dictionary contains all grids, with names!
+        self.meshgrid_dict = dict(zip(self.name, grid))  # meshgrid_dict is a dictionary contains all grids, with names!
         self.shape = [len(values) for values in
                       kwargs.values()]  # shape of state space: notice that this is not the shape of gridded matrix!!!! I made a mistake when firstly code.
-        self.N = grid[0].size  # the length of all state possibles, length of space numbers
-        self.number = np.array(range(self.N))
-        self.number_matrix = self.number.reshape(self.shape)
+        if len(kwargs)==0:
+            self.N = 0
+            self.number = []
+            self.number_matrix = []
+        else:
+            self.N = grid[0].size  # the length of all state possibles, length of space numbers
+            self.number = np.array(range(self.N))
+            self.number_matrix = self.number.reshape(self.shape)
+        # generate .index, .value,
+        self.index = self('index')
+        self.value = self('value')
+
 
     def index_to_number(self, index):
         return (self.number_matrix[tuple(index)])
@@ -111,11 +122,31 @@ class space:
             return [self.number_to_index(i) for i in self.number]
         elif method == "value":
             return [self.index_to_value(self.number_to_index(i)) for i in self.number]
-    def map(self, func):
+    def map(self, func, full_output=False):
         # Legacy
-        input_list = [self.index_to_value(self.number_to_index(i)) for i in self.number]
-        res = map(func, input_list)
+        input_list = self.value
+        res = list(map(func, input_list))
+        self.v = res
+        if full_output:
+            return (input_list, res)
+        else:
+            return res
+    def named_map(self, func, **par):
+        '''
+        :param func: named function, its argument order must be the same with how space is defined!
+        named_map allows function to take in parameters
+        e.g. f(x, y, theta) where x, y are in space s, and theta is parameter.
+        To get all result of f(x, y), use s.named_map(f, theta = ..)
+        :return: [list of function values]
+        '''
+        su = lambda args: func(*args)
+        input_state_list = self.value
+        input_list = list(tuple(input_state_list[i]) + tuple(par.values()) for i in self.number)
+        res = list(map(su, input_list))
+        self.value = input_state_list
+        self.v = res
         return res
+
     def imap(self, func, nodes = 8, full_output=False):
         '''
         :param func: single-input function([value]) to map on all values, e.g. f should be something such that f([0,1,2]) is feasible. If you define
@@ -128,13 +159,31 @@ class space:
         if False, only return ([func(locations)])
         
         '''
-        input_list = [self.index_to_value(self.number_to_index(i)) for i in self.number]
+        input_list = self.value
         pool = ProcessPool(nodes = nodes)
         res = list(pool.imap(func, input_list))
+        self.v = res
         if full_output:
             return (input_list, res)
         else:
             return res
+    def slice(self, input_type = 'index', **kwargs):
+        '''
+        NOT FINISHED.
+        想法：1 作出 [a,b,c] 所有的， 这样的list （for b=b0, c=c0, a=any)
+        2. 对于所有self('index') 进行遍历，每个看看是否由1 中的list，若有的话，报告此时的self.v[i]
+        3. 整理汇报结果。
+        After having computed self.v, we want to know how v varies with one single variable,
+        given other variables are fixed.
+        :param kwargs:  e.g., a=1, b=2, ...
+        :param input_type: 'index'/'value' currently only support 'index'
+        :return: [x, y (function values) ]
+
+        '''
+        if kwargs == None:
+            return (self('value'), self.v)
+
+
 
 class anonymous_space:
     """
@@ -421,11 +470,11 @@ class vertex:
 
 
 class optim:
-    def __init__(self, problem="max", state: dict = None,
-                 action: dict = None,
+    def __init__(self, problem="max", state: dict = {},
+                 action: dict = {},
                  constrain=None,
-                 u=None, par={}, index_transition=None,
-                 state_space=None, action_space=None, joint_space=None):
+                 u=foo_1, par={}, index_transition=None,
+                 state_space=None, action_space=None, joint_space=None, parallel = 1):
         """
         optim is the synthetic class that prepare one for computing optimizing problem. The class
         first works to define discrete space, then can be used to compute and optimize functions
@@ -436,9 +485,14 @@ class optim:
         constrain = feasible_func,
         u = u_func, par= {...})
 
+        OVERHAUL, Branch from the : INTENDS TO ADD FOLLOWING FEATURES:
+        1. allow empty space: i.e. allow state == {}, allow empty constrain functions.
+        2. enable parallelling computation, but by default it should not be enabled.
+
+
         Attributes
         ----------
-            tate_space
+            state_space
             action_space
             joint_space : space
 
@@ -468,7 +522,7 @@ class optim:
             function([index of state and action]) that returns
             something like[ [0.5, [... index in state space that has probability of 0.5 in next period]],
             [0.1, [...]], ....]
-
+        parallel: 1, default is 1, how many cores used for doing constrain and utility computations.
 
 
         """
@@ -485,26 +539,28 @@ class optim:
         self.feasible_index = None  # dictionary containing feasible indices, each is a L array.
         self.feasible_state = None
         self.feasible_action = None
-        self.v = []  # value functions a Nx array
-        self.ρ = []  # policy functions a Nx array
+        self.v = []  # value functions a S array
+        self.ρ = []  # policy functions a S array
         self.reward_grid = None  # value grid for all feasible state-action pairs.
         self.R = []  # L-array, reward for all feasible pairs of state-actions
         self.test = None
-        self.Q = None  # transition matrix, Nx * L matrix
+        self.Q = None  # transition matrix, S * L matrix
+        self.parallel = parallel
 
-        if state == None:
+        if state_space != None:
             self.state_space = state_space
             self.action_space = action_space
             self.joint_space = joint_space
             self.state = state_space.dict
             self.action = action_space.dict
-        elif state_space == None:
+        else:
             self.state_space = space(**state)
             self.action_space = space(**action)
             self.joint_space = space(**state, **action)
 
     def feasibility(self, method=None):
-        '''Feasibility solves the feasible indices, and produce feasible state-action paired numbers.
+        '''Feasibility solves the feasible indices, and 1. produce feasible state-action paired numbers. 2. compute
+        the reward matrix self.R
         self.feasibility() would update self.feasible_state => [0,1,5,7,....] consists of feasible states, paired with
         self.feasible_action => [5,2,....]
         these number can be turned back into indices, using
@@ -513,21 +569,26 @@ class optim:
 
         # print("start feasibility computation.")
         # === constrain_grid is the grid in joint_space containing feasible combinations
-        # print("creating constrain grid...")
-        constrain_grid = np.where(self.constrain(**self.joint_space.grid_dict, **self.par))
+        #print("creating constrain grid...")
+        if self.constrain == None: # if no default constrain function, use all indices.
+            # first, use space('index') to call all combined indices in joint_space. To split them,
+            # just transpose the matrix to use each row.
+            s_index = np.transpose(np.array(self.joint_space('index')))
+            # split the matrix and make them into a tuple ( consistent with the result of np.where)
+            constrain_grid = tuple([i for i in s_index])
+        else:
+            constrain_grid = np.where(self.constrain(**self.joint_space.meshgrid_dict, **self.par))
         self.constrain_grid = constrain_grid  ###
         # === reward grid defined here, original code, very inefficient
         # because it computes all grids. The newer one only computes the feasible one
-        # ("creating reward grid and R list...")
-        # self.reward_grid = self.u(**self.joint_space.grid_dict, **self.par)
+        # self.reward_grid = self.u(**self.joint_space.meshgrid_dict, **self.par)
         # self.R = self.reward_grid[tuple(constrain_grid)]
-        # === ! Up change!
 
         # === This is the feasible index for each variables, containing each feasible state-action pairs
         self.feasible_index = dict(zip(self.joint_space.name, constrain_grid))
 
         # === Now turn these indices into state and action paired numbers
-        # print("creating .feasible_state and .feasible_action, which are list of numbers ")
+        #print("creating .feasible_state and .feasible_action, which are list of numbers ")
         state_indices = np.array([self.feasible_index[j] for j in self.state.keys()])
         self.feasible_state = np.apply_along_axis(self.state_space.index_to_number, 0, state_indices)
         self.feasible_state_indices = state_indices
@@ -535,16 +596,19 @@ class optim:
         self.feasible_action = np.apply_along_axis(self.action_space.index_to_number, 0, action_indices)
         self.feasible_action_indices = action_indices
         self.L = self.feasible_state.size
-        # Renewed code to derive the self.R object, which renders .reward_grid None!
-        # write it down here!!!
-        # print("creating reward grid and R list...")
+
+        #print("creating reward grid and R list...")
         values = list(self.joint_space.set[i][self.constrain_grid[i]] for i in range(len(self.joint_space.set)))
         self.feasible_values = values
         self.feasible_input_list = list(tuple(values[i][j] for i in range(len(values))) +
                                         tuple(self.par.values()) for j in range(self.L))
         su = lambda args: self.u(*args)
-        if method == "multiprocessing":  # multiprocessing is still experimental, do not use it yet!
-            self.R = []
+        if self.parallel >=2:  # multiprocessing is still experimental, do not use it yet!
+            # WRITE HERE NOW! imap su onto feasible_input_list
+            pool = ProcessPool(nodes = self.parallel)
+            self.R = np.array(list(pool.map(su, self.feasible_input_list)))
+            pool.close()
+            pool.join()
         else:
             # self.R = np.array([su(self.feasible_input_list[i]) for
             # i in range(self.L)])
@@ -657,13 +721,15 @@ class optim:
         self.optimize()
         self.optimize_transition()
 
-    def policy(self, x, input_method='index', output_method='best_input'):
+    def policy(self, x=[0], input_method='index', output_method='best_input'):
         '''
         policy(x, input_method = 'index', output_method = 'best_input') returns the policy
 
-        when input_method = 'index'/'value'/'number'; currently, only supports index input
+        input_method = 'index'/'value'/'number'; currently, only supports index input
         output_method = 'best_input'/'action_number'/'action_index'/'action_value'
-
+        :param x: by default is [0], when input_method == 'index', x should be the index in state_space.
+        :param output_method: 'best_input' only works if you have done self.optimization_transition().
+        'action_index/number/value' returns the best action.
 
         '''
         s_number = self.state_space.index_to_number(x)
@@ -896,6 +962,131 @@ def model_par_diff(model, base_par, examined_pars, changed_par_values,
     return market_diff
 
 
+def model_par(model, base_par, examined_pars, changed_par_values,
+                   interested_variables, logging=False, output_property='diff', parallel = 8,
+                   **kwargs):
+    """
+    model_par is model_par_diff + multiprocessing.
+    Parameters
+    ----------
+    model : function
+        model(par, **kwargs) returns a dict like {'':, ...}.
+    base_par : dict
+        baseline parameters.
+    examined_pars : list
+        a list of parameters to change. e.g. ['r', 'r', 'n', 'g'] of which you vary the values.
+    changed_par_values : list
+        a list of parameter values corresponding to examine_pars. e.g. [3,3,5,np.linspace(1,2,3)]
+    interested_variables : list
+        a list of variables in returning dictionary of which you want to compose the table.
+    logging : bool
+        True if a distinct entry named 'logging' is recorded in the returning table. Notice that if Ture, model()
+        must incorporate an entry 'logging' in the returning dictionary.
+    output_property : str
+        'diff' or 'return'. Use 'return' if you want the talbe to record the model returning variables,
+        Use 'diff' if you want the table to record the variable difference to the baseline model.
+    kwargs : dict
+        other inputs for the table
+
+    Returns
+    -------
+        pd.DataFrame
+    """
+
+    origional_par_values = list(base_par[j] for j in examined_pars)
+
+    def worker(i):
+        if i == len(examined_pars):
+            market0 = model(base_par, **kwargs)
+            return market0
+        print('analyzing variables...')
+        print(examined_pars[i])
+        temp_par = base_par.copy()
+        temp_par[examined_pars[i]] = changed_par_values[i]
+        market_temp = model(temp_par, **kwargs)
+        market_toappend = {}
+        for j in list(interested_variables):
+            market_toappend[j] = market_temp[j]
+            market_toappend['issue'] = [examined_pars[i], 'changed to', changed_par_values[i], 'origional is',
+                                    origional_par_values[i]]
+        if logging:
+            market_toappend['logging'] = market_temp['logging']
+        return market_toappend
+
+    pool = ProcessPool(nodes = parallel)
+    market_all = list(pool.map(worker, list(range(len(examined_pars)+1))))
+
+    market = market_all[0:len(examined_pars)]
+    market0 = market_all[len(examined_pars)]
+
+    ''' # Original loop
+    for i in range(len(examined_pars)):
+        print('analyzing variables...')
+        print(examined_pars[i])
+        temp_par = base_par.copy()
+        temp_par[examined_pars[i]] = changed_par_values[i]
+        market_temp = model(temp_par, **kwargs)
+        market_toappend = {}
+        for j in list(market0.keys()):
+            market_toappend[j] = [market_temp[j], market0[j]]
+        market_toappend['issue'] = [examined_pars[i], 'changed to', changed_par_values[i], 'origional is',
+                                    origional_par_values[i]]
+        if logging:
+            market_toappend['logging'] = market_temp['logging']
+        market.append(market_toappend.copy())  # append the resulting dictionary
+    '''
+    def market_analyze(market, market0, interested_market_variables):
+        '''
+        Translating the list of aggregate markets into a pd.DataFrame object..
+        '''
+        res_dict = {}  # collect all results in this single dictionary, used for a DataFrame.
+
+        # Initialize the res_dict
+        for var_name in interested_market_variables:
+            res_dict[var_name] = []
+        res_dict['parameters'] = []
+        if output_property == "diff":
+            res_dict['parameter difference'] = []
+        elif output_property == "return":
+            res_dict['parameter value'] = []
+        res_dict['parameter original'] = []
+        if logging:
+            res_dict['logging'] = []  # create entry of logging if True
+
+        for i in range(len(market)):
+            # market is a list of market profiles in dictionary.
+            # in each loop, I compute the market changes..
+            for var_name in interested_market_variables:
+                if output_property == "diff":
+                    res_dict[var_name].append(market[i][var_name] - market0[i][var_name])
+                elif output_property == "return":
+                    res_dict[var_name].append(market[i][var_name])
+            res_dict['parameters'].append(market[i]['issue'][0])
+            if output_property == "diff":
+                res_dict['parameter difference'].append(market[i]['issue'][2] - market[i]['issue'][4])
+            elif output_property == "return":
+                res_dict['parameter value'].append(market[i]['issue'][2])
+            res_dict['parameter original'].append(market[i]['issue'][4])
+            if logging:
+                res_dict['logging'].append(market[i]['logging'])
+
+        for var_name in interested_market_variables:
+            res_dict[var_name].append(market0[var_name])
+        res_dict['parameters'].append('Baseline Model')
+        if output_property == "diff":
+            res_dict['parameter difference'].append(np.nan)
+        elif output_property == "return":
+            res_dict['parameter value'].append(np.nan)
+        res_dict['parameter original'].append(np.nan)
+        if logging:
+            res_dict['logging'].append(market0['logging'])
+
+        return res_dict
+
+    market_diff = market_analyze(market, market0, interested_variables)
+    market_diff = pd.DataFrame(data=market_diff)  # turn dictionary into df
+    ##
+    return market_diff
 
 
 def before_foo(par, time):
@@ -1008,11 +1199,11 @@ if __name__ == '__main__':
 
     constrain = np.vectorize(constrain)
 
-    xo = optim("max", state={"x1": np.linspace(1, 3, 4), "x2": np.linspace(3, 6, 5),
+    xo = optim("max", state={"x1": np.linspace(1, 3, 5), "x2": np.linspace(3, 6, 8),
                              "x3": np.linspace(6, 10, 3)},
                action={"y1": np.linspace(1, 3, 2), "y2": np.linspace(3, 6, 3)},
                constrain=constrain,
-               u=f_vec)
+               u=f_vec, parallel=1)
     qe.util.tic()
     xo.feasibility()
     qe.util.toc()

@@ -1,21 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-win or die python functions.
+useful python functions.
 This library contains useful computational functions!
 Table
 
 Created on Sun Sep 22 11:04:01 2013
 
-@author: Wang Di,
+@author: Matho Di Wang,
 """
 import scipy as sp
 import numpy as np
-import pylab as pl
+
 import scipy.optimize as opt
 from random import uniform
 from scipy.interpolate import interp1d
 from scipy.interpolate import griddata
 import itertools as itr
+from matplotlib import pyplot as plt
 
 def take_list(x, idx):
     """ Returns sublist of x according to a list of index.
@@ -121,7 +122,7 @@ class ecdf:
         conditions=(self.obs>=a) * (self.obs<=b)
         y=c[conditions]
         x=self.obs[conditions]
-        pl.plot(x,y)
+        plt.plot(x,y)
         
 def fsolve(f,x0=0):
     """ Generic function=0 solver. This is only for one-argument function. 
@@ -211,7 +212,7 @@ def ezplot(f, interval=[-1,1], N=1000):
     
     xx= np.linspace(interval[0], interval[1], N)
     yy = map(f, xx)
-    pl.plot(xx, yy)
+    plt.plot(xx, yy)
 
 def D(f, right=True, dx= 1e-6):
     """ D(f, right=T) returns the 1-D right approximate derivative of function f,
