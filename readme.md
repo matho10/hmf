@@ -10,3 +10,7 @@ V(x)=u(x,c)+\beta \int_{x'\in G(x,c)} f(x'|x,c)V(x')dx',
 $$
 where $f(x'|x,c)$ is called kernel function, a conditional probability density function given current state $x$ and choice $c$. This is a standard optimal control problem and the key to understand its solvability is the concavity of the functional involved here. For further mathematical studies, see []..
 
+When putting equation (1) into real actions, we face a great degree of difficulties. First, it is not straightforward to translate a continuous space into numerics that a computer usually understands. This difficulty is addressed by `hmf3.space` which is efficient in building, indexing and reshaping a . 
+
+## `hmf3.space` 
+

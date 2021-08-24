@@ -2,6 +2,10 @@
 # I use label ### to indication changes that I may delete later...
 
 """
+Notes:
+    2021 March
+    * AFter carefully reviewing, it is found that space('index') space('number') takes too much time! It needs to be addressed!
+
 Heterogeneous modelling functions, version 3.
 Author: Wang Di,
 Date: 2019, Sept.
@@ -79,10 +83,12 @@ class space:
         self.name = list(kwargs.keys())
         self.set = list(kwargs.values())
         # self.grid = np.meshgrid(*self.set, indexing = 'ij') # returns meshgrids
-        grid = np.meshgrid(*self.set, indexing='ij')
+        qe.util.tic()
+        grid = np.meshgrid(*self.set, indexing='ij') # this step is efficient, very quick
         self.meshgrid_dict = dict(zip(self.name, grid))  # meshgrid_dict is a dictionary contains all grids, with names!
         self.shape = [len(values) for values in
                       kwargs.values()]  # shape of state space: notice that this is not the shape of gridded matrix!!!! I made a mistake when firstly code.
+
         if len(kwargs)==0:
             self.N = 0
             self.number = []
@@ -93,6 +99,8 @@ class space:
             self.number_matrix = self.number.reshape(self.shape)
         # generate .index, .value,
         self.index = self('index')
+        print('space {} takes time'.format(self.name))
+        qe.util.toc()
         self.value = self('value')
 
 
@@ -1199,11 +1207,14 @@ if __name__ == '__main__':
 
     constrain = np.vectorize(constrain)
 
-    xo = optim("max", state={"x1": np.linspace(1, 3, 5), "x2": np.linspace(3, 6, 8),
+    qe.util.tic()
+    xo = optim("max", state={"x1": np.linspace(1, 3, 50), "x2": np.linspace(3, 6, 30),
                              "x3": np.linspace(6, 10, 3)},
                action={"y1": np.linspace(1, 3, 2), "y2": np.linspace(3, 6, 3)},
                constrain=constrain,
                u=f_vec, parallel=1)
+    qe.util.toc()
+
     qe.util.tic()
     xo.feasibility()
     qe.util.toc()
@@ -1211,3 +1222,5 @@ if __name__ == '__main__':
     qe.util.tic()
     xo.optimize()
     qe.util.toc()
+
+

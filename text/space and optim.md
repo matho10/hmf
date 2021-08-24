@@ -1,4 +1,4 @@
-# Space and optim: a new way of looking into numerics
+# Space and optim: Packages for modelling numerics and optimization
 
 ## Defining computational regions
 
