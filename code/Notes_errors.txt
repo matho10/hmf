@@ -1,0 +1,6 @@
+Aug 2020,
+1. notice that optim fails when uses default constrain function, because it is anonymous and takes no arguments.
+
+2. Notice that parallel =1 should be default, and >=2 will not bring benefit when the space is large.
+Furthermore, it may conflict with the use of pathos if the outer program functions multiprocessing. So consider
+get rid of this feature in the future.
