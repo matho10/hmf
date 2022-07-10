@@ -15,7 +15,7 @@ def u(z, x, y, a):
     return x**2 - (y-a) **2
 
 def constrain(z, x, y, a):
-    return (x**2 + y**2<=4)
+    return (x**2 + y**2<=40)
 
 
 if __name__=="__main__":
@@ -36,4 +36,5 @@ if __name__=="__main__":
     print(s.v)
     print('policy function')
     print(s.policy(output_method='action_value'))
+
 
