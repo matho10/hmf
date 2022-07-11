@@ -12,5 +12,6 @@ where $f(x'|x,c)$ is called kernel function, a conditional probability density f
 
 When putting equation (1) into real actions, we face a great degree of difficulties. First, it is not straightforward to translate a continuous space into numerics that a computer usually understands. This difficulty is addressed by `hmf3.space` which is efficient in building, indexing and reshaping the joint space of states and actions. Second, it is not easy to formulate 
 
-## `hmf3.space` 
+
+
 
