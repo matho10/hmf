@@ -104,7 +104,15 @@ def scaleback(x,z=None,axis=None):
     return output
 
 class ecdf:
-    
+    """
+    Empirical cumulative distribution function of 1-d random variable.\n
+    Example:\n
+    samples=np.random.uniform(0,1,2000) \n
+    F=ecdf(samples) \n
+    F(0.5) \n
+    F.plot() \n
+
+    """
     def __init__(self,obs):
         obs=np.array(obs)
         obs.sort()
