@@ -106,11 +106,17 @@ def scaleback(x,z=None,axis=None):
 class ecdf:
     """
     Empirical cumulative distribution function of 1-d random variable.\n
-    Example:\n
-    samples=np.random.uniform(0,1,2000) \n
-    F=ecdf(samples) \n
-    F(0.5) \n
-    F.plot() \n
+
+    Example
+    -------
+    
+    samples=np.random.uniform(0,1,2000)
+
+    F=ecdf(samples)
+
+    F(0.5)
+
+    F.plot()
 
     """
     def __init__(self,obs):
@@ -245,8 +251,13 @@ def index_max(values):
 
 class rv1(object):
     """ rv1() defines a 1-d random variable in its theoretical form.
-    
-    Objects:
+
+    UNfinished
+    ----------
+
+    Objects
+    -------
+
     mode: either "continuous" or "discrete". 
     F: cdf of random variable.
     p: pdf (if "continuous") or pmf (if "discrete")

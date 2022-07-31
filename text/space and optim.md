@@ -21,10 +21,3 @@ and usable functions:
 `index_to_number, number_to_index, index_to_value, number_to_value, __call__, map, imap`
 
 ### use optim to do graph
-
-
-
-
-
-
-
